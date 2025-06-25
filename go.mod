@@ -7,6 +7,7 @@ toolchain go1.24.4
 require k8s.io/client-go v0.33.2
 
 require (
+	github.com/NVIDIA/go-nvml v0.12.9-0
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
