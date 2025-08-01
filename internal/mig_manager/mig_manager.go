@@ -1,4 +1,4 @@
-package k8s_manager
+package mig_manager
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 
 type MIGDevice types.MIGDevice
 
-func listMigDevices() {
+func ListMigDevices() {
 	fmt.Println("MIG Device Availability Tool (NVML Version)")
 	fmt.Println("==========================================")
 
@@ -162,4 +162,104 @@ func listMigDevices() {
 		fmt.Printf("%-8d %-8d %-20s %-10s %-10d %-15s\n",
 			device.DeviceID, device.InstanceID, device.GPU, inUseStr, device.Memory, device.ProfileName)
 	}
+}
+
+// cleanUpCiAndGi tears down the MIG compute instance and GPU instance.
+func cleanUpCiAndGi(gpuid int, cid int, gid int) error {
+
+	parent, ret := nvml.DeviceGetHandleByUUID(string(gpuid))
+	if ret != nvml.SUCCESS {
+		fmt.Println("error obtaining GPU handle for cleanup")
+		return fmt.Errorf("unable to get device handle: %v", ret)
+	}
+
+	gi, ret := parent.GetGpuInstanceById(gid)
+	if ret != nvml.SUCCESS {
+		fmt.Println("error obtaining gpu instance")
+		return fmt.Errorf("unable to find GI: %v", ret)
+	}
+	ci, ret := gi.GetComputeInstanceById(cid)
+	if ret != nvml.SUCCESS {
+		fmt.Println("error obtaining compute instance")
+		return fmt.Errorf("unable to find CI: %v", ret)
+	}
+	// Destroy CI
+	ret = ci.Destroy()
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("unable to destroy CI: %v", ret)
+	}
+	// Destroy GI
+	ret = gi.Destroy()
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("unable to destroy GI: %v", ret)
+	}
+
+	fmt.Println("Successfully destroyed MIG resources")
+	return nil
+
+}
+
+func CreateMigSlice(device nvml.Device, giProfileInfo nvml.GpuInstanceProfileInfo, ciProfileId int32, placement nvml.GpuInstancePlacement) error {
+
+	fmt.Println("creating slice")
+	var gi nvml.GpuInstance
+	var ret nvml.Return
+	gi, ret = device.CreateGpuInstanceWithPlacement(&giProfileInfo, &placement)
+	if ret != nvml.SUCCESS {
+		switch ret {
+		case nvml.ERROR_INSUFFICIENT_RESOURCES:
+			// Handle insufficient resources case
+			gpuInstances, ret := device.GetGpuInstances(&giProfileInfo)
+			if ret != nvml.SUCCESS {
+				fmt.Println("gpu instances cannot be listed")
+				return fmt.Errorf("gpu instances cannot be listed: %v", ret)
+			}
+
+			for _, gpuInstance := range gpuInstances {
+				gpuInstanceInfo, ret := gpuInstance.GetInfo()
+				if ret != nvml.SUCCESS {
+					fmt.Println("unable to obtain gpu instance info")
+					return fmt.Errorf("unable to obtain gpu instance info: %v", ret)
+				}
+
+				parentUuid, ret := gpuInstanceInfo.Device.GetUUID()
+				if ret != nvml.SUCCESS {
+					fmt.Println("unable to obtain parent gpu uuuid")
+					return fmt.Errorf("unable to obtain parent gpu uuuid: %v", ret)
+				}
+
+				gpuUUid, ret := device.GetUUID()
+				if ret != nvml.SUCCESS {
+					fmt.Println("unable to obtain parent gpu uuuid")
+				}
+				if gpuInstanceInfo.Placement.Start == placement.Start && parentUuid == gpuUUid {
+					gi, ret = device.GetGpuInstanceById(int(gpuInstanceInfo.Id))
+					if ret != nvml.SUCCESS {
+						fmt.Println("unable to obtain gi post iteration")
+						return fmt.Errorf("unable to obtain gi post iteration, got value: %v", gi)
+					}
+				}
+			}
+		default:
+			// this case is typically for scenario where ret is not equal to nvml.ERROR_INSUFFICIENT_RESOURCES
+			fmt.Println(ret, "gpu instance creation errored out with unknown error")
+			return fmt.Errorf("gpu instance creation failed: %v", ret)
+		}
+		return fmt.Errorf("error creating gpu instance profile with: %v", ret)
+	}
+
+	ciProfileInfo, ret := gi.GetComputeInstanceProfileInfo(int(ciProfileId), 0)
+	if ret != nvml.SUCCESS {
+		fmt.Println(ret, "error getting compute instance profile info")
+		return fmt.Errorf("error getting compute instance profile info: %v", ret)
+	}
+
+	ci, ret := gi.CreateComputeInstance(&ciProfileInfo)
+	if ret != nvml.SUCCESS {
+		if ret != nvml.ERROR_INSUFFICIENT_RESOURCES {
+			fmt.Println(ret, "error creating new compute instance, reusing", "ci", ci)
+		}
+	}
+
+	return nil
 }
