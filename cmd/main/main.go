@@ -41,8 +41,8 @@ func create(gpuid int, profile string, start uint32) {
 	}
 
 	// 2. get gi info
-	giProfileID := config.A100_PROFILES[profile].GID
-	ciProfileID := config.A100_PROFILES[profile].CID
+	giProfileID := config.A30_PROFILES[profile].GID
+	ciProfileID := config.A30_PROFILES[profile].CID
 	giProfileInfo, retGI := device.GetGpuInstanceProfileInfo(giProfileID)
 	if retGI != nvml.SUCCESS {
 		fmt.Printf("Failed to get GPU instance profile info: %v\n", retGI)
@@ -51,7 +51,7 @@ func create(gpuid int, profile string, start uint32) {
 
 	fmt.Println("The profile info === %v", giProfileInfo)
 	// 3. make placement object
-	size := config.A100_PROFILES[profile].Size
+	size := config.A30_PROFILES[profile].Size
 	placement := nvml.GpuInstancePlacement{
 		Start: start,
 		Size:  size,

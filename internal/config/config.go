@@ -34,3 +34,21 @@ var A100_PROFILES = map[string]types.Profile{
 		Size: 8,
 	},
 }
+
+var A30_PROFILES = map[string]types.Profile{
+	"1g.6gb": {
+		GID:  0,
+		CID:  0,
+		Size: 1,
+	},
+	"2g.12gb": {
+		GID:  1,
+		CID:  1,
+		Size: 2,
+	},
+	"4g.24gb": {
+		GID:  3,
+		CID:  3,
+		Size: 4,
+	},
+}
